@@ -10,6 +10,6 @@ RUN apk add --no-cache \
     && pip3 install --no-cache-dir --break-system-packages glances[web] \
     && apk del gcc python3-dev musl-dev linux-headers
 
-EXPOSE 61208 61209
+EXPOSE 61208
 
 CMD ["glances", "-w", "-B", "0.0.0.0"]
