@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  glances:
+    build: .
+    container_name: glances-server
+    restart: unless-stopped
+    ports:
+      - "61208:61208"
+      - "61209:61209"
+    environment:
+      - TZ=UTC
+      - GLANCES_OPT=-w
+    pid: host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    privileged: false
