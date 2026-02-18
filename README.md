@@ -1,25 +1,28 @@
 # Glances Server Docker
 
-Minimal Alpine Linux-based Docker image running Glances in server mode for comprehensive system monitoring.
+Minimal Alpine Linux-based Docker image running Glances in server mode with full Docker container visibility and real host system metrics.
 
 ## About This Project
 
-This project provides a lightweight, production-ready Docker container for [Glances](https://github.com/nicolargo/glances) - a cross-platform system monitoring tool. The container runs Glances in server mode with a web interface, allowing you to monitor system resources (CPU, memory, disk, network, processes) from anywhere.
+This project provides a lightweight, production-ready Docker container for [Glances](https://github.com/nicolargo/glances) - a cross-platform system monitoring tool. The container runs Glances in server mode with a web interface, allowing you to monitor system resources (CPU, memory, disk, network, processes, and all running Docker containers) from anywhere.
 
 **Key Features:**
-- 🐧 Minimal Alpine Linux base (147MB total image size)
+- 🐧 Minimal Alpine Linux base (pinned to `3.21` for reproducible builds)
 - 📊 Real-time monitoring of CPU, memory, disk, network, processes
+- 🐳 Full Docker container visibility (all containers shown in Glances UI)
+- 🖥️ Real host metrics (not container-scoped) via `/proc` and `/sys` mounts
 - 🌐 Modern web UI with responsive design
 - 🔌 RESTful API for programmatic access
-- 🖥️ Client mode support for remote monitoring
-- 🔒 Lightweight and secure
+- 🔒 Least-privilege: no privileged mode, all mounts read-only
 
 ## Quick Start
 
 ### Using Docker Compose (Recommended)
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
+
+Then open: **http://localhost:61208**
 
 ### Using Docker CLI
 ```bash
@@ -28,6 +31,12 @@ docker run -d \
   -p 61208:61208 \
   --pid=host \
   --restart=unless-stopped \
+  -v /var/run/docker.sock:/var/run/docker.sock:ro \
+  -v /proc:/host/proc:ro \
+  -v /sys:/host/sys:ro \
+  -v /etc/os-release:/etc/os-release:ro \
+  -e HOST_PROC=/host/proc \
+  -e HOST_SYS=/host/sys \
   glances-server
 ```
 
@@ -37,7 +46,7 @@ docker run -d \
 
 ```bash
 # Clone or navigate to the project directory
-cd /path/to/glances
+cd /path/to/glances-docked
 
 # Build the image
 docker build -t glances-server .
@@ -51,13 +60,13 @@ docker images glances-server
 **Option A: Using Docker Compose**
 ```bash
 # Start the container
-docker-compose up -d
+docker compose up -d
 
 # View logs
-docker-compose logs -f
+docker compose logs -f
 
 # Stop the container
-docker-compose down
+docker compose down
 ```
 
 **Option B: Using Docker CLI**
@@ -68,14 +77,19 @@ docker run -d \
   -p 61208:61208 \
   --pid=host \
   --restart=unless-stopped \
+  -v /var/run/docker.sock:/var/run/docker.sock:ro \
+  -v /proc:/host/proc:ro \
+  -v /sys:/host/sys:ro \
+  -v /etc/os-release:/etc/os-release:ro \
+  -e HOST_PROC=/host/proc \
+  -e HOST_SYS=/host/sys \
   glances-server
 
 # View logs
 docker logs -f glances
 
 # Stop the container
-docker stop glances
-docker rm glances
+docker stop glances && docker rm glances
 ```
 
 ### 3. Tag the Image
@@ -83,7 +97,6 @@ docker rm glances
 ```bash
 # Tag for Docker Hub (replace 'yourusername' with your Docker Hub username)
 docker tag glances-server yourusername/glances-server:latest
-docker tag glances-server yourusername/glances-server:v1.0.0
 
 # Verify tags
 docker images | grep glances-server
@@ -97,7 +110,6 @@ docker login
 
 # Push the image
 docker push yourusername/glances-server:latest
-docker push yourusername/glances-server:v1.0.0
 ```
 
 ### 5. Pull and Run from Docker Hub
@@ -112,6 +124,12 @@ docker run -d \
   -p 61208:61208 \
   --pid=host \
   --restart=unless-stopped \
+  -v /var/run/docker.sock:/var/run/docker.sock:ro \
+  -v /proc:/host/proc:ro \
+  -v /sys:/host/sys:ro \
+  -v /etc/os-release:/etc/os-release:ro \
+  -e HOST_PROC=/host/proc \
+  -e HOST_SYS=/host/sys \
   yourusername/glances-server:latest
 ```
 
@@ -134,6 +152,9 @@ curl http://localhost:61208/api/4/cpu
 # Get memory info
 curl http://localhost:61208/api/4/mem
 
+# Get Docker container info
+curl http://localhost:61208/api/4/docker
+
 # Get all stats
 curl http://localhost:61208/api/4/all
 ```
@@ -151,51 +172,46 @@ glances -c YOUR_SERVER_IP -p 61208
 ## Configuration
 
 ### Environment Variables
-Customize the container using environment variables in `docker-compose.yml`:
 
-```yaml
-environment:
-  - TZ=America/New_York          # Set timezone
-  - GLANCES_OPT=-w               # Glances options
-```
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `TZ` | `UTC` | Container timezone |
+| `HOST_PROC` | `/host/proc` | Path to mounted host `/proc` |
+| `HOST_SYS` | `/host/sys` | Path to mounted host `/sys` |
+
+### Volume Mounts
+
+| Mount | Purpose |
+|-------|---------|
+| `/var/run/docker.sock:/var/run/docker.sock:ro` | Docker container visibility |
+| `/proc:/host/proc:ro` | Host CPU, memory, process metrics |
+| `/sys:/host/sys:ro` | Host hardware info |
+| `/etc/os-release:/etc/os-release:ro` | Host OS identification |
 
 ### Ports
 - `61208`: Web interface and API (default Glances web port)
-- `61209`: Alternative client connection port (if needed)
-
-### Volumes
-To persist configuration (optional):
-```yaml
-volumes:
-  - ./glances.conf:/etc/glances/glances.conf:ro
-```
 
 ## Docker Image Details
 
-**Base Image**: Alpine Linux (latest)
-**Size**: ~147MB
-**Installed Packages**:
-- Python 3.12
-- Glances (latest) with web dependencies
-- FastAPI & Uvicorn (for web server)
-- psutil (for system monitoring)
+**Base Image**: Alpine Linux 3.21 (pinned)
+**Installed Python Packages**:
+- `glances[web]` — monitoring core + web UI (FastAPI/Uvicorn)
+- `docker` — Docker SDK for Python (required for container visibility)
+- `psutil` — system metrics (installed as glances dependency)
 
 ## Security Considerations
 
-- The container runs with `--pid=host` to access host processes
-- No privileged mode required for basic monitoring
-- Bind to `0.0.0.0` to allow external connections (use firewall rules for production)
-- Consider adding authentication for production use
+- `privileged: false` — no elevated container privileges
+- All volume mounts use `:ro` (read-only)
+- `pid: host` is required for Glances to enumerate host processes
+- Port `61208` binds to all interfaces by default — use firewall rules or bind to `127.0.0.1:61208:61208` if external access is not needed
+- Consider adding Glances authentication for production use
 
 ## Troubleshooting
 
 ### Container won't start
 ```bash
-# Check logs
-docker logs glances
-
-# Check if port is already in use
-netstat -tulpn | grep 61208
+docker logs glances-server
 ```
 
 ### Can't access web interface
@@ -203,40 +219,18 @@ netstat -tulpn | grep 61208
 # Verify container is running
 docker ps | grep glances
 
-# Check port mapping
-docker port glances
-
 # Test locally
-curl http://localhost:61208
+curl http://localhost:61208/api/4/status
 ```
 
-### No system metrics showing
-- Ensure `--pid=host` flag is set
-- Check container logs for errors
+### Docker containers not showing in Glances
+- Ensure `/var/run/docker.sock` is mounted (already in `docker-compose.yml`)
+- The `docker` Python package must be installed in the image (already in `Dockerfile`)
+- Check logs for socket permission errors: `docker compose logs glances`
 
-## Advanced Usage
-
-### Custom Glances Configuration
-Create a `glances.conf` file and mount it:
-```bash
-docker run -d \
-  --name glances \
-  -p 61208:61208 \
-  --pid=host \
-  -v $(pwd)/glances.conf:/etc/glances/glances.conf:ro \
-  glances-server
-```
-
-### Monitor Docker Containers
-Mount Docker socket to monitor containers:
-```bash
-docker run -d \
-  --name glances \
-  -p 61208:61208 \
-  --pid=host \
-  -v /var/run/docker.sock:/var/run/docker.sock:ro \
-  glances-server
-```
+### Host metrics show container values instead of host values
+- Ensure `/proc` and `/sys` are mounted to `/host/proc` and `/host/sys`
+- Ensure `HOST_PROC` and `HOST_SYS` env vars are set (already in `docker-compose.yml`)
 
 ## Project Structure
 
@@ -244,8 +238,10 @@ docker run -d \
 .
 ├── Dockerfile              # Docker image definition
 ├── docker-compose.yml      # Docker Compose configuration
-├── .dockerignore          # Docker build exclusions
-└── README.md              # This file
+├── .dockerignore           # Docker build exclusions
+├── docs/
+│   └── plans/              # Implementation plans
+└── README.md               # This file
 ```
 
 ## Contributing
@@ -263,6 +259,13 @@ This project is open source. Glances itself is licensed under LGPL-3.0.
 - **Docker Hub**: https://hub.docker.com/r/yourusername/glances-server
 
 ## Changelog
+
+### v1.1.0
+- Added `docker` Python package for full Docker container visibility
+- Added host `/proc`, `/sys`, `/etc/os-release` mounts for real host metrics
+- Added `HOST_PROC` and `HOST_SYS` environment variables
+- Pinned base image to `alpine:3.21` for reproducible builds
+- Removed deprecated `version` field from `docker-compose.yml`
 
 ### v1.0.0 (2025-11-12)
 - Initial release
