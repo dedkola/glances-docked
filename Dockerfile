@@ -7,7 +7,7 @@ RUN apk add --no-cache \
     python3-dev \
     musl-dev \
     linux-headers \
-    && pip3 install --no-cache-dir --break-system-packages glances[web] \
+    && pip3 install --no-cache-dir --break-system-packages glances[web] docker \
     && apk del gcc python3-dev musl-dev linux-headers
 
 EXPOSE 61208
